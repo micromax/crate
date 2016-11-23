@@ -30,20 +30,23 @@ public class CollectorContext {
     private final IndexFieldDataService fieldData;
     private final CollectorFieldsVisitor fieldsVisitor;
     private final int jobSearchContextId;
+    private final byte relationId;
 
     private SourceLookup sourceLookup;
 
     public CollectorContext(IndexFieldDataService fieldData,
                             CollectorFieldsVisitor visitor) {
-        this(fieldData, visitor, -1);
+        this(fieldData, visitor, -1, (byte) 0);
     }
 
     public CollectorContext(IndexFieldDataService fieldData,
                             CollectorFieldsVisitor visitor,
-                            int jobSearchContextId) {
+                            int jobSearchContextId,
+                            byte relationId) {
         this.fieldData = fieldData;
         fieldsVisitor = visitor;
         this.jobSearchContextId = jobSearchContextId;
+        this.relationId = relationId;
     }
 
     public CollectorFieldsVisitor visitor() {
@@ -52,6 +55,10 @@ public class CollectorContext {
 
     public int jobSearchContextId() {
         return jobSearchContextId;
+    }
+
+    public byte relationId() {
+        return relationId;
     }
 
     public IndexFieldDataService fieldData() {

@@ -47,7 +47,8 @@ public class TableFunctionCollectPhase extends RoutedCollectPhase implements Col
                               TableFunctionRelation relation,
                               List<Projection> projections,
                               List<Symbol> outputs,
-                              WhereClause whereClause) {
+                              WhereClause whereClause,
+                              byte relationId) {
         super(jobId,
             phaseId,
             relation.function().info().ident().name(),
@@ -56,7 +57,8 @@ public class TableFunctionCollectPhase extends RoutedCollectPhase implements Col
             outputs,
             projections,
             whereClause,
-            DistributionInfo.DEFAULT_BROADCAST);
+            DistributionInfo.DEFAULT_BROADCAST,
+            relationId);
         this.relation = relation;
     }
 

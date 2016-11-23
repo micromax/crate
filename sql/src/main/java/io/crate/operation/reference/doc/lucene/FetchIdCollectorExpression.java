@@ -26,15 +26,16 @@ import org.apache.lucene.index.LeafReaderContext;
 
 import java.io.IOException;
 
-public class DocIdCollectorExpression extends LuceneCollectorExpression<Long> {
+public class FetchIdCollectorExpression extends LuceneCollectorExpression<Long> {
 
-    public static final String COLUMN_NAME = DocSysColumns.DOCID.name();
+    public static final String COLUMN_NAME = DocSysColumns.FETCHID.name();
 
     private long jobSearchContextId;
     private long docId;
     private int docBase;
+    private byte relationId;
 
-    public DocIdCollectorExpression() {
+    public FetchIdCollectorExpression() {
         super(COLUMN_NAME);
     }
 
@@ -42,12 +43,13 @@ public class DocIdCollectorExpression extends LuceneCollectorExpression<Long> {
     public void startCollect(CollectorContext context) {
         super.startCollect(context);
         this.jobSearchContextId = (long) context.jobSearchContextId();
+        this.relationId = context.relationId();
     }
 
     @Override
     public void setNextDocId(int doc) {
         super.setNextDocId(doc);
-        docId = packDocId(jobSearchContextId, docBase + doc);
+        docId = FetchIds.packFetchId(relationId, jobSearchContextId, docBase + doc);
     }
 
     @Override
@@ -60,15 +62,4 @@ public class DocIdCollectorExpression extends LuceneCollectorExpression<Long> {
         super.setNextReader(context);
         docBase = context.docBase;
     }
-
-    /**
-     * Pack jobSearchContextId and doc integers into 1 long.
-     * Reverse logic is:
-     * int jobSearchContextId = (int)(docId >> 32);
-     * int doc = (int)docId;
-     */
-    private long packDocId(long jobSearchContextId, int doc) {
-        return ((jobSearchContextId) << 32) | (doc & 0xffffffffL);
-    }
-
 }

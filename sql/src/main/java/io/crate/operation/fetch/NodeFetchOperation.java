@@ -82,8 +82,7 @@ public class NodeFetchOperation {
                 exprs,
                 streamers,
                 fetchContext.searcher(readerId),
-                indexService.fieldData(),
-                readerId
+                indexService.fieldData()
             );
         }
     }

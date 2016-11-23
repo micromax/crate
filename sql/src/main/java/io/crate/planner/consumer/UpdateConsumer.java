@@ -178,8 +178,8 @@ public class UpdateConsumer implements Consumer {
             toCollect,
             Collections.<Projection>singletonList(updateProjection),
             nestedStatement.whereClause(),
-            DistributionInfo.DEFAULT_BROADCAST
-        );
+            DistributionInfo.DEFAULT_BROADCAST,
+            (byte) 0);
         return Merge.ensureOnHandler(
             new Collect(collectPhase, TopN.NO_LIMIT, 0, 1, 1, null),
             plannerContext,
@@ -240,7 +240,8 @@ public class UpdateConsumer implements Consumer {
                 ImmutableList.<Symbol>of(uidReference),
                 ImmutableList.<Projection>of(updateProjection),
                 whereClause,
-                DistributionInfo.DEFAULT_BROADCAST
+                DistributionInfo.DEFAULT_BROADCAST,
+                (byte) 0
             );
             Collect collect = new Collect(collectPhase, TopN.NO_LIMIT, 0, 1, 1, null);
             return Merge.ensureOnHandler(collect, plannerContext, Collections.singletonList(MergeCountProjection.INSTANCE));
