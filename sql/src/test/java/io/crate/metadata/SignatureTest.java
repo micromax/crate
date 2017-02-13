@@ -29,60 +29,91 @@ import io.crate.types.DataTypes;
 import io.crate.types.SetType;
 import org.junit.Test;
 
-import static org.hamcrest.Matchers.is;
+import java.util.List;
 
-@SuppressWarnings("MismatchedQueryAndUpdateOfCollection")
+import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.nullValue;
+
 public class SignatureTest extends CrateUnitTest {
+
+    private void assertWrongSignature(Signature.SignatureOperator op, List<DataType> in) {
+        assertThat(op.apply(in), nullValue());
+    }
+
+    private void assertSignature(Signature.SignatureOperator op, List<DataType> in, DataType... out) {
+        assertThat(op.apply(in), contains(out));
+    }
+
+    private void assertSameSignature(Signature.SignatureOperator op, List<DataType> in) {
+        assertThat(op.apply(in), contains(in.toArray()));
+    }
 
     @Test
     public void testSimpleMatch() {
-        Signature signature = new Signature(DataTypes.STRING);
-        assertThat(signature.matches(ImmutableList.of(DataTypes.STRING)), is(true));
-        assertThat(signature.matches(ImmutableList.of(DataTypes.LONG)), is(false));
+        Signature.SignatureOperator signature = Signature.of(DataTypes.STRING);
+        assertSameSignature(signature, ImmutableList.of(DataTypes.STRING));
+        assertSignature(signature, ImmutableList.of(DataTypes.UNDEFINED), DataTypes.STRING);
+        assertWrongSignature(signature, ImmutableList.of(DataTypes.LONG));
     }
 
     @Test
-    public void testMatchUndefined() {
-        Signature signature = new Signature(DataTypes.STRING);
-        assertThat(signature.matches(ImmutableList.of(DataTypes.UNDEFINED)), is(true));
-    }
-
-    @Test
-    public void testMatchAny() {
-        Signature signature = new Signature(DataTypes.ANY);
-        for (DataType dataType : DataTypes.ALL_TYPES) {
-            assertThat(signature.matches(ImmutableList.of(dataType)), is(true));
-        }
+    public void testMatchSize() {
+        Signature.SignatureOperator signature = Signature.of(1);
+        // the size matcher cannot rewrite so null stays null
+        assertSameSignature(signature, ImmutableList.of(DataTypes.UNDEFINED));
+        assertSameSignature(signature, ImmutableList.of(DataTypes.BOOLEAN));
+        assertWrongSignature(signature, ImmutableList.of(DataTypes.BOOLEAN, DataTypes.BOOLEAN));
     }
 
     @Test
     public void testMatchAnyArray() {
-        Signature signature = new Signature(DataTypes.ANY_ARRAY);
-        assertThat(signature.matches(ImmutableList.of(DataTypes.DOUBLE_ARRAY)), is(true));
-        assertThat(signature.matches(ImmutableList.of(DataTypes.OBJECT_ARRAY)), is(true));
+        Signature.SignatureOperator sig = Signature.of(Signature.ArgMatcher.ANY_ARRAY);
+        assertSameSignature(sig, ImmutableList.of(DataTypes.DOUBLE_ARRAY));
+        assertSameSignature(sig, ImmutableList.of(DataTypes.OBJECT_ARRAY));
+        assertWrongSignature(sig, ImmutableList.of(DataTypes.STRING));
+        assertSameSignature(sig, ImmutableList.of(DataTypes.UNDEFINED));
     }
 
     @Test
     public void testMatchAnySet() {
-        Signature signature = new Signature(DataTypes.ANY_SET);
-        assertThat(signature.matches(ImmutableList.of(new SetType(DataTypes.LONG))), is(true));
-        assertThat(signature.matches(ImmutableList.of(new SetType(DataTypes.INTEGER))), is(true));
+        Signature.SignatureOperator signature = Signature.of(Signature.ArgMatcher.ANY_SET);
+        assertSameSignature(signature, ImmutableList.of(new SetType(DataTypes.LONG)));
+        assertWrongSignature(signature, ImmutableList.of(DataTypes.STRING));
     }
 
     @Test
-    public void testVarArgsSingleMatching() {
-        Signature signature = new Signature(0, DataTypes.STRING);
-        assertThat(signature.matches(ImmutableList.of(DataTypes.STRING, DataTypes.STRING)), is(true));
-        assertThat(signature.matches(ImmutableList.of(DataTypes.STRING, DataTypes.STRING, DataTypes.STRING)), is(true));
-        assertThat(signature.matches(ImmutableList.of(DataTypes.STRING, DataTypes.LONG)), is(false));
-        assertThat(signature.matches(ImmutableList.of(DataTypes.STRING, DataTypes.STRING, DataTypes.LONG)), is(false));
+    public void testVarArgs() {
+        Signature.SignatureOperator sig = Signature.of(true, false, Signature.ArgMatcher.STRING);
+        assertSameSignature(sig, ImmutableList.of(DataTypes.STRING));
+        assertSameSignature(sig, ImmutableList.of(DataTypes.STRING, DataTypes.STRING));
+        assertSameSignature(sig, ImmutableList.of(DataTypes.STRING, DataTypes.STRING, DataTypes.STRING));
+        assertWrongSignature(sig, ImmutableList.of(DataTypes.INTEGER));
+        assertWrongSignature(sig, ImmutableList.of(DataTypes.STRING, DataTypes.LONG));
+        assertWrongSignature(sig, ImmutableList.of(DataTypes.LONG, DataTypes.STRING, DataTypes.STRING));
+
+        // nulls are replaced
+        assertSignature(sig, ImmutableList.of(DataTypes.STRING, DataTypes.UNDEFINED, DataTypes.STRING),
+            DataTypes.STRING, DataTypes.STRING, DataTypes.STRING);
+
+        assertSignature(sig, ImmutableList.of(DataTypes.UNDEFINED, DataTypes.UNDEFINED),
+            DataTypes.STRING, DataTypes.STRING);
     }
 
     @Test
-    public void testVarArgsSequenceMatching() {
-        Signature signature = new Signature(0, DataTypes.STRING, DataTypes.LONG);
-        assertThat(signature.matches(ImmutableList.of(DataTypes.STRING, DataTypes.LONG)), is(true));
-        assertThat(signature.matches(ImmutableList.of(DataTypes.STRING, DataTypes.LONG, DataTypes.STRING, DataTypes.LONG)), is(true));
-        assertThat(signature.matches(ImmutableList.of(DataTypes.STRING, DataTypes.LONG, DataTypes.STRING)), is(false));
+    public void testVarArgsStrictTypes() {
+        // matches varArgs of any, but need to be of same type
+        Signature.SignatureOperator sig = Signature.of(true, true, Signature.ArgMatcher.ANY);
+
+        assertSameSignature(sig, ImmutableList.of(DataTypes.STRING));
+        assertSameSignature(sig, ImmutableList.of(DataTypes.STRING, DataTypes.STRING));
+
+        assertWrongSignature(sig, ImmutableList.of(DataTypes.STRING, DataTypes.BOOLEAN));
+
+        // nulls are replaced only if possible
+        assertSignature(sig, ImmutableList.of(DataTypes.STRING, DataTypes.UNDEFINED, DataTypes.STRING),
+            DataTypes.STRING, DataTypes.STRING, DataTypes.STRING);
+
+        // if all args are null, then no guess can be made so the args are not modified
+        assertSameSignature(sig, ImmutableList.of(DataTypes.UNDEFINED, DataTypes.UNDEFINED));
     }
 }

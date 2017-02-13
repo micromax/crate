@@ -125,7 +125,12 @@ public class EqOperator extends CmpOperator {
         }
     }
 
-    static class EqOperatorResolver implements FunctionResolver {
+    static class EqOperatorResolver extends FunctionResolvers.BaseFunctionResolver {
+
+        EqOperatorResolver() {
+            super(Signature.of(2).and(
+                Signature.of(true, true, Signature.ArgMatcher.ANY)));
+        }
 
         @Override
         public FunctionImplementation getForTypes(List<DataType> dataTypes) throws IllegalArgumentException {
@@ -140,11 +145,6 @@ public class EqOperator extends CmpOperator {
                 return new ObjectEqOperator(info);
             }
             return new EqOperator(info);
-        }
-
-        @Override
-        public List<Signature> signatures() {
-            return Signature.SIGNATURES_ALL_PAIRS_OF_SAME;
         }
     }
 }
