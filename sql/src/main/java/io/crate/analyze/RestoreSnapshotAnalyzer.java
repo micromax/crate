@@ -22,11 +22,13 @@
 
 package io.crate.analyze;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import io.crate.exceptions.PartitionAlreadyExistsException;
 import io.crate.exceptions.TableAlreadyExistsException;
+import io.crate.exceptions.TableUnknownException;
 import io.crate.executor.transport.RepositoryService;
 import io.crate.metadata.PartitionName;
 import io.crate.metadata.Schemas;
@@ -38,11 +40,10 @@ import io.crate.metadata.table.TableInfo;
 import io.crate.sql.tree.RestoreSnapshot;
 import io.crate.sql.tree.Table;
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.snapshots.Snapshot;
+import org.elasticsearch.snapshots.SnapshotsService;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
+import java.util.*;
 
 import static io.crate.analyze.SnapshotSettings.IGNORE_UNAVAILABLE;
 import static io.crate.analyze.SnapshotSettings.WAIT_FOR_COMPLETION;
@@ -55,10 +56,12 @@ class RestoreSnapshotAnalyzer {
         .build();
 
     private final RepositoryService repositoryService;
+    private final SnapshotsService snapshotsService;
     private final Schemas schemas;
 
-    RestoreSnapshotAnalyzer(RepositoryService repositoryService, Schemas schemas) {
+    RestoreSnapshotAnalyzer(RepositoryService repositoryService, SnapshotsService snapshotsService, Schemas schemas) {
         this.repositoryService = repositoryService;
+        this.snapshotsService = snapshotsService;
         this.schemas = schemas;
     }
 
@@ -70,8 +73,8 @@ class RestoreSnapshotAnalyzer {
         repositoryService.failIfRepositoryDoesNotExist(repositoryName);
 
         // validate and extract settings
-        Settings.Builder builder = GenericPropertiesConverter.settingsFromProperties(
-            node.properties(), analysis.parameterContext(), SETTINGS);
+        Settings settings = GenericPropertiesConverter.settingsFromProperties(
+            node.properties(), analysis.parameterContext(), SETTINGS).build();
 
         if (node.tableList().isPresent()) {
             List<Table> tableList = node.tableList().get();
@@ -102,11 +105,11 @@ class RestoreSnapshotAnalyzer {
                     restoreIndices.add(partitionName.asIndexName());
                 } else {
                     if (table.partitionProperties().isEmpty()) {
-                        // add a partitions wildcard
-                        // to match all partitions if a partitioned table was meant
-                        restoreIndices.add(PartitionName.templateName(tableIdent.schema(), tableIdent.name()) + "*");
-                        // add index name
-                        restoreIndices.add(tableIdent.indexName());
+                        restoreIndices.addAll(indexNames(
+                            tableIdent,
+                            snapshotsService.snapshots(repositoryName, true),
+                            settings.getAsBoolean(IGNORE_UNAVAILABLE.settingName(), IGNORE_UNAVAILABLE.defaultValue()))
+                        );
                     } else {
                         restoreIndices.add(PartitionPropertiesAnalyzer.toPartitionName(
                             tableIdent,
@@ -120,10 +123,41 @@ class RestoreSnapshotAnalyzer {
             return RestoreSnapshotAnalyzedStatement.forTables(
                 nameParts.get(1),
                 repositoryName,
-                builder.build(),
+                settings,
                 ImmutableList.copyOf(restoreIndices));
         } else {
-            return RestoreSnapshotAnalyzedStatement.all(nameParts.get(1), repositoryName, builder.build());
+            return RestoreSnapshotAnalyzedStatement.all(nameParts.get(1), repositoryName, settings);
         }
+    }
+
+    @VisibleForTesting
+    public static Collection<String> indexNames(TableIdent tableIdent, List<Snapshot> snapshots, boolean ignoreUnavailable) {
+        // If ignoreUnavailable is true, it's cheaper to simply return indexName and the partitioned wildcard instead
+        // checking if it's a partitioned table or not
+        String indexName = tableIdent.indexName();
+        if (ignoreUnavailable) {
+            return Arrays.asList(
+                indexName,
+                PartitionName.templateName(tableIdent.schema(), tableIdent.name()) + "*"
+            );
+        }
+        for (Snapshot snapshot : snapshots) {
+            for (String index : snapshot.indices()) {
+                if (indexName.equals(index)) {
+                    return Collections.singletonList(indexName);
+                } else if(indexIsPartitionOf(index, tableIdent)) {
+                    // add a partitions wildcard
+                    // to match all partitions if a partitioned table was meant
+                    return Collections.singletonList(
+                        PartitionName.templateName(tableIdent.schema(), tableIdent.name()) + "*");
+                }
+            }
+        }
+        throw new TableUnknownException(tableIdent);
+    }
+
+    private static boolean indexIsPartitionOf(String index, TableIdent tableIdent) {
+        return PartitionName.isPartition(index) &&
+               PartitionName.fromIndexOrTemplate(index).tableIdent().equals(tableIdent);
     }
 }

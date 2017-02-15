@@ -46,9 +46,9 @@ import io.crate.metadata.information.InformationSchemaInfo;
 import io.crate.metadata.sys.SysSchemaInfo;
 import io.crate.metadata.table.SchemaInfo;
 import io.crate.metadata.table.TestingTableInfo;
-import io.crate.planner.TableStats;
 import io.crate.planner.Plan;
 import io.crate.planner.Planner;
+import io.crate.planner.TableStats;
 import io.crate.sql.parser.SqlParser;
 import org.elasticsearch.action.admin.cluster.repositories.delete.TransportDeleteRepositoryAction;
 import org.elasticsearch.action.admin.cluster.repositories.put.TransportPutRepositoryAction;
@@ -56,6 +56,7 @@ import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.common.inject.ModulesBuilder;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.indices.analysis.IndicesAnalysisService;
+import org.elasticsearch.snapshots.SnapshotsService;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -86,6 +87,7 @@ public class SQLExecutor {
         private final Functions functions;
 
         private TableStats tableStats = new TableStats();
+        private SnapshotsService snapshotsService = mock(SnapshotsService.class);
 
         public Builder(ClusterService clusterService) {
             this.clusterService = clusterService;
@@ -145,7 +147,8 @@ public class SQLExecutor {
                     ),
                     new ModulesBuilder().add(new RepositorySettingsModule())
                         .createInjector()
-                        .getInstance(RepositoryParamValidator.class)
+                        .getInstance(RepositoryParamValidator.class),
+                    snapshotsService
                 ),
                 new Planner(
                     clusterService,
@@ -176,6 +179,11 @@ public class SQLExecutor {
 
         public Builder setTableStats(TableStats tableStats) {
             this.tableStats = tableStats;
+            return this;
+        }
+
+        public Builder setSnapshotsService(SnapshotsService snapshotsService) {
+            this.snapshotsService = snapshotsService;
             return this;
         }
     }

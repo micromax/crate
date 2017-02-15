@@ -24,6 +24,7 @@ package io.crate.analyze;
 import com.google.common.collect.ImmutableList;
 import io.crate.exceptions.*;
 import io.crate.metadata.PartitionName;
+import io.crate.metadata.TableIdent;
 import io.crate.test.integration.CrateUnitTest;
 import io.crate.testing.SQLExecutor;
 import org.apache.lucene.util.BytesRef;
@@ -34,16 +35,25 @@ import org.elasticsearch.cluster.metadata.RepositoriesMetaData;
 import org.elasticsearch.cluster.metadata.RepositoryMetaData;
 import org.elasticsearch.cluster.metadata.SnapshotId;
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.snapshots.Snapshot;
+import org.elasticsearch.snapshots.SnapshotsService;
 import org.elasticsearch.test.cluster.NoopClusterService;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.Collection;
+import java.util.Collections;
+
 import static io.crate.analyze.TableDefinitions.*;
 import static org.hamcrest.Matchers.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class SnapshotRestoreAnalyzerTest extends CrateUnitTest {
 
     private SQLExecutor executor;
+
+    private SnapshotsService snapshotsService = mock(SnapshotsService.class);
 
     @Before
     public void before() throws Exception {
@@ -62,7 +72,10 @@ public class SnapshotRestoreAnalyzerTest extends CrateUnitTest {
             .addDocTable(USER_TABLE_INFO)
             .addDocTable(TEST_DOC_LOCATIONS_TABLE_INFO)
             .addDocTable(TEST_PARTITIONED_TABLE_INFO)
+            .setSnapshotsService(snapshotsService)
             .build();
+
+
     }
 
     private <T> T analyze(String statement) {
@@ -240,15 +253,33 @@ public class SnapshotRestoreAnalyzerTest extends CrateUnitTest {
 
     @Test
     public void testRestoreSnapshotSingleTable() throws Exception {
+        when(snapshotsService.snapshots("my_repo", true)).thenReturn(
+            Collections.singletonList(
+                new Snapshot("snapshot01", Collections.singletonList("custom.restoreme"), 0L)
+            )
+        );
+
         RestoreSnapshotAnalyzedStatement statement = analyze(
             "RESTORE SNAPSHOT my_repo.my_snapshot TABLE custom.restoreme");
-        String template = PartitionName.templateName("custom", "restoreme") + "*";
-        assertThat(statement.indices(), containsInAnyOrder("custom.restoreme", template));
+        assertThat(statement.indices().get(0), is("custom.restoreme"));
         assertThat(statement.settings().getAsMap(),
             allOf(
                 hasEntry("wait_for_completion", "false"),
                 hasEntry("ignore_unavailable", "false")
             ));
+    }
+
+    @Test
+    public void testRestoreSnapshotSinglePartitionedTable() throws Exception {
+        when(snapshotsService.snapshots("my_repo", true)).thenReturn(
+            Collections.singletonList(
+                new Snapshot("snapshot01", Collections.singletonList(".partitioned.restoreme.046jcchm6krj4e1g60o30c0"), 0L)
+            )
+        );
+        RestoreSnapshotAnalyzedStatement statement = analyze(
+            "RESTORE SNAPSHOT my_repo.my_snapshot TABLE restoreme");
+        String template = PartitionName.templateName(null, "restoreme") + "*";
+        assertThat(statement.indices().get(0), is(template));
     }
 
     @Test
@@ -294,4 +325,22 @@ public class SnapshotRestoreAnalyzerTest extends CrateUnitTest {
         expectedException.expectMessage("Repository 'unknown_repo' unknown");
         analyze("RESTORE SNAPSHOT unknown_repo.my_snapshot ALL");
     }
+
+    @Test
+    public void testIndexNamesIgnoreUnavailable() throws Exception {
+        Collection<String> indexNames = RestoreSnapshotAnalyzer.indexNames(
+            new TableIdent(null, "my_table"),
+            Collections.emptyList(),
+            true
+        );
+        assertThat(indexNames, containsInAnyOrder("my_table", PartitionName.templateName(null, "my_table") + "*"));
+    }
+
+    @Test
+    public void testRestoreUnknownTable() throws Exception {
+        expectedException.expect(TableUnknownException.class);
+        expectedException.expectMessage("Table 'doc.t1' unknown");
+        RestoreSnapshotAnalyzer.indexNames(new TableIdent(null, "t1"), Collections.emptyList(), false);
+    }
+
 }

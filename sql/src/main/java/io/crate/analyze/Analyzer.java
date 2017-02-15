@@ -34,6 +34,7 @@ import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.inject.Singleton;
 import org.elasticsearch.indices.analysis.IndicesAnalysisService;
+import org.elasticsearch.snapshots.SnapshotsService;
 
 import java.util.Locale;
 
@@ -74,7 +75,8 @@ public class Analyzer {
                     ClusterService clusterService,
                     IndicesAnalysisService indicesAnalysisService,
                     RepositoryService repositoryService,
-                    RepositoryParamValidator repositoryParamValidator) {
+                    RepositoryParamValidator repositoryParamValidator,
+                    SnapshotsService snapshotsService) {
         NumberOfShards numberOfShards = new NumberOfShards(clusterService);
         this.relationAnalyzer = new RelationAnalyzer(clusterService, functions, schemas);
         this.dropTableAnalyzer = new DropTableAnalyzer(schemas);
@@ -107,7 +109,7 @@ public class Analyzer {
         this.createRepositoryAnalyzer = new CreateRepositoryAnalyzer(repositoryService, repositoryParamValidator);
         this.dropSnapshotAnalyzer = new DropSnapshotAnalyzer(repositoryService);
         this.createSnapshotAnalyzer = new CreateSnapshotAnalyzer(repositoryService, schemas);
-        this.restoreSnapshotAnalyzer = new RestoreSnapshotAnalyzer(repositoryService, schemas);
+        this.restoreSnapshotAnalyzer = new RestoreSnapshotAnalyzer(repositoryService, snapshotsService, schemas);
     }
 
     public Analysis boundAnalyze(Statement statement, SessionContext sessionContext, ParameterContext parameterContext) {
