@@ -45,7 +45,26 @@ public class BatchConsumerToRowReceiverTest extends CrateUnitTest {
     }
 
     @Test
-    public void finishReceiverWhenNextRowYieldsStop() {
+    public void cursorIsClosedAfterAllIsConsumed() {
+        RowReceiver rowReceiver = mock(RowReceiver.class);
+        BatchIterator cursor = mock(BatchIterator.class);
+        when(cursor.allLoaded()).thenReturn(true);
+        when(cursor.moveNext())
+            .thenReturn(true)
+            .thenReturn(false);
+
+        when(rowReceiver.setNextRow(cursor))
+            .thenReturn(RowReceiver.Result.CONTINUE);
+
+        BatchConsumerToRowReceiver adapter = new BatchConsumerToRowReceiver(rowReceiver);
+        adapter.accept(cursor, null);
+
+        verify(cursor).close();
+        verify(rowReceiver).setNextRow(cursor);
+    }
+
+    @Test
+    public void finishReceiverAndCloseCursorWhenNextRowYieldsStop() {
         RowReceiver rowReceiver = mock(RowReceiver.class);
         BatchIterator cursor = mock(BatchIterator.class);
         when(cursor.allLoaded()).thenReturn(true);
@@ -59,7 +78,8 @@ public class BatchConsumerToRowReceiverTest extends CrateUnitTest {
         BatchConsumerToRowReceiver adapter = new BatchConsumerToRowReceiver(rowReceiver);
         adapter.accept(cursor, null);
 
-        verify(rowReceiver).finish(any());
+        verify(cursor).close();
+        verify(rowReceiver).finish(RepeatHandle.UNSUPPORTED);
     }
 
     @Test

@@ -53,7 +53,8 @@ public class BatchConsumerToRowReceiver implements BatchConsumer {
                     case CONTINUE:
                         break;
                     case STOP:
-                        rowReceiver.finish(getRepeatHandle(iterator));
+                        rowReceiver.finish(RepeatHandle.UNSUPPORTED);
+                        iterator.close();
                         return;
                     case PAUSE:
                         rowReceiver.pauseProcessed(async -> consumeIterator(iterator));
@@ -67,7 +68,8 @@ public class BatchConsumerToRowReceiver implements BatchConsumer {
         }
 
         if (iterator.allLoaded()) {
-            rowReceiver.finish(getRepeatHandle(iterator));
+            iterator.close();
+            rowReceiver.finish(RepeatHandle.UNSUPPORTED);
         } else {
             iterator.loadNextBatch().whenComplete(
                 (r, e) -> {
@@ -80,12 +82,5 @@ public class BatchConsumerToRowReceiver implements BatchConsumer {
                 }
             );
         }
-    }
-
-    private RepeatHandle getRepeatHandle(BatchIterator iterator) {
-        return () -> {
-            iterator.moveFirst();
-            consumeIterator(iterator);
-        };
     }
 }
