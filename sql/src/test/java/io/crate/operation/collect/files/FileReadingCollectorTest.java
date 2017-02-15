@@ -83,7 +83,7 @@ public class FileReadingCollectorTest extends CrateUnitTest {
         tmpFileEmptyLine = File.createTempFile("emptyLine", ".json", copy_from_empty.toFile());
         try (BufferedWriter writer =
                  new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(tmpFileGz)),
-                                    StandardCharsets.UTF_8))) {
+                     StandardCharsets.UTF_8))) {
             writer.write("{\"name\": \"Arthur\", \"id\": 4, \"details\": {\"age\": 38}}\n");
             writer.write("{\"id\": 5, \"name\": \"Trillian\", \"details\": {\"age\": 33}}\n");
         }
@@ -144,13 +144,15 @@ public class FileReadingCollectorTest extends CrateUnitTest {
 
     @Test
     public void testCollectFromUriWithGlob() throws Throwable {
-        CollectingRowReceiver projector = getObjects(Paths.get(tmpFile.getParentFile().toURI()).toUri().toString() + "file*.json");
+        CollectingRowReceiver projector = getObjects(
+            Paths.get(tmpFile.getParentFile().toURI()).toUri().toString() + "file*.json");
         assertCorrectResult(projector.result());
     }
 
     @Test
     public void testCollectFromDirectory() throws Throwable {
-        CollectingRowReceiver projector = getObjects(Paths.get(tmpFile.getParentFile().toURI()).toUri().toString() + "*");
+        CollectingRowReceiver projector = getObjects(
+            Paths.get(tmpFile.getParentFile().toURI()).toUri().toString() + "*");
         assertCorrectResult(projector.result());
     }
 
