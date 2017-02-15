@@ -34,6 +34,7 @@ import io.crate.external.S3ClientHelper;
 import io.crate.metadata.*;
 import io.crate.operation.Input;
 import io.crate.operation.InputFactory;
+import io.crate.operation.collect.BatchIteratorCollector;
 import io.crate.operation.projectors.RowReceiver;
 import io.crate.operation.reference.file.FileLineReferenceResolver;
 import io.crate.test.integration.CrateUnitTest;
@@ -64,7 +65,6 @@ import static org.hamcrest.Matchers.isA;
 import static org.mockito.Matchers.*;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-
 
 public class FileReadingCollectorTest extends CrateUnitTest {
 
@@ -251,11 +251,10 @@ public class FileReadingCollectorTest extends CrateUnitTest {
         InputFactory.Context<LineCollectorExpression<?>> ctx =
             inputFactory.ctxForRefs(FileLineReferenceResolver::getImplementation);
         List<Input<?>> inputs = Collections.singletonList(ctx.add(raw));
-        FileReadingCollector collector = new FileReadingCollector(
+        FileReadingIterator iterator = new FileReadingIterator(
             fileUris,
             inputs,
             ctx.expressions(),
-            rowReceiver,
             compression,
             ImmutableMap.of(
                 LocalFsFileInputFactory.NAME, new LocalFsFileInputFactory(),
@@ -287,7 +286,7 @@ public class FileReadingCollectorTest extends CrateUnitTest {
             1,
             0
         );
-        collector.doCollect();
+        new BatchIteratorCollector(iterator, rowReceiver).doCollect();
     }
 
     private static class WriteBufferAnswer implements Answer<Integer> {

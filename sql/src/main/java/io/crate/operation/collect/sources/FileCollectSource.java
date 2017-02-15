@@ -27,10 +27,11 @@ import io.crate.analyze.symbol.Symbol;
 import io.crate.analyze.symbol.ValueSymbolVisitor;
 import io.crate.metadata.Functions;
 import io.crate.operation.InputFactory;
+import io.crate.operation.collect.BatchIteratorCollector;
 import io.crate.operation.collect.CrateCollector;
 import io.crate.operation.collect.JobCollectContext;
 import io.crate.operation.collect.files.FileInputFactory;
-import io.crate.operation.collect.files.FileReadingCollector;
+import io.crate.operation.collect.files.FileReadingIterator;
 import io.crate.operation.collect.files.LineCollectorExpression;
 import io.crate.operation.projectors.RowReceiver;
 import io.crate.operation.reference.file.FileLineReferenceResolver;
@@ -71,17 +72,18 @@ public class FileCollectSource implements CollectSource {
 
         List<String> fileUris;
         fileUris = targetUriToStringList(fileUriCollectPhase.targetUri());
-        return ImmutableList.of(new FileReadingCollector(
+        FileReadingIterator fileReadingIterator = new FileReadingIterator(
             fileUris,
             ctx.topLevelInputs(),
             ctx.expressions(),
-            downstream,
             fileUriCollectPhase.compression(),
             fileInputFactoryMap,
             fileUriCollectPhase.sharedStorage(),
             readers.length,
             Arrays.binarySearch(readers, clusterService.state().nodes().getLocalNodeId())
-        ));
+        );
+
+        return ImmutableList.of(new BatchIteratorCollector(fileReadingIterator, downstream));
     }
 
     private static List<String> targetUriToStringList(Symbol targetUri) {
