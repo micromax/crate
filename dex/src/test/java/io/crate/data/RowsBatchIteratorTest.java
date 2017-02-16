@@ -23,7 +23,7 @@
 package io.crate.data;
 
 import io.crate.testing.BatchIteratorTester;
-import io.crate.testing.BatchSimulatingBatchIt;
+import io.crate.testing.BatchSimulatingIterator;
 import io.crate.testing.RowGenerator;
 import org.junit.Test;
 
@@ -51,7 +51,7 @@ public class RowsBatchIteratorTest {
         Iterable<Row> rows = RowGenerator.range(0, 50);
         Supplier<BatchIterator> batchIteratorSupplier = () -> {
             return new CloseAssertingBatchIterator(
-                new BatchSimulatingBatchIt(
+                new BatchSimulatingIterator(
                     RowsBatchIterator.newInstance(rows),
                     10,
                     5

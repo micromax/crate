@@ -37,7 +37,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * An BatchIterator implementation which delegates to another one, but adds "fake" batches.
  */
-public class BatchSimulatingBatchIt implements BatchIterator {
+public class BatchSimulatingIterator implements BatchIterator {
 
     private final BatchIterator delegate;
     private final int batchSize;
@@ -55,7 +55,7 @@ public class BatchSimulatingBatchIt implements BatchIterator {
      * @param maxAdditionalFakeBatches how many {@link #loadNextBatch()} calls are allowed after {@code delegate.allLoaded()} is true.
      *                   (This is an upper limit, if a consumer calls moveNext correctly, the actual number may be lower)
      */
-    public BatchSimulatingBatchIt(BatchIterator delegate, int batchSize, int maxAdditionalFakeBatches) {
+    public BatchSimulatingIterator(BatchIterator delegate, int batchSize, int maxAdditionalFakeBatches) {
         assert batchSize > 0 : "batchSize must be greater than 0. It is " + batchSize;
         assert maxAdditionalFakeBatches > 0
             : "maxAdditionalFakeBatches must be greater than 0. It is " + maxAdditionalFakeBatches;
