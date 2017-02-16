@@ -52,14 +52,16 @@ public class BatchSimulatingBatchIt implements BatchIterator {
 
     /**
      * @param batchSize how many {@link #moveNext()} calls are allowed per batch before it returns false
-     * @param numBatches how many {@link #loadNextBatch()} calls are allowed after {@code delegate.allLoaded()} is true.
+     * @param maxAdditionalFakeBatches how many {@link #loadNextBatch()} calls are allowed after {@code delegate.allLoaded()} is true.
      *                   (This is an upper limit, if a consumer calls moveNext correctly, the actual number may be lower)
      */
-    public BatchSimulatingBatchIt(BatchIterator delegate, int batchSize, int numBatches) {
+    public BatchSimulatingBatchIt(BatchIterator delegate, int batchSize, int maxAdditionalFakeBatches) {
         assert batchSize > 0 : "batchSize must be greater than 0. It is " + batchSize;
-        assert numBatches > 0 : "numBatches must be greater than 0. It is " + numBatches;
+        assert maxAdditionalFakeBatches > 0
+            : "maxAdditionalFakeBatches must be greater than 0. It is " + maxAdditionalFakeBatches;
+
         this.delegate = delegate;
-        this.numBatches = numBatches;
+        this.numBatches = maxAdditionalFakeBatches;
         this.batchSize = batchSize;
 
         this.loadNextDelays = new Random(System.currentTimeMillis()).longs(0, 300).iterator();
@@ -113,8 +115,9 @@ public class BatchSimulatingBatchIt implements BatchIterator {
 
     @Override
     public CompletionStage<?> loadNextBatch() {
-        currentlyLoading.compareAndSet(false, true);
-
+        if (currentlyLoading.compareAndSet(false, true) == false) {
+            return CompletableFutures.failedFuture(new IllegalStateException("loadNextBatch call during load operation"));
+        }
         if (delegate.allLoaded()) {
             currentBatch++;
             if (currentBatch > numBatches) {
